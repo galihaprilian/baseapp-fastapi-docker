@@ -26,3 +26,4 @@ fi
 
 # Start Uvicorn with live reload
 exec uvicorn --reload --host $HOST --port $PORT --log-level $LOG_LEVEL "$APP_MODULE"
+
