@@ -1,0 +1,66 @@
+version: "3.3"
+services:
+
+  proxy:
+    image: traefik:v2.2
+    networks:
+      - ${TRAEFIK_PUBLIC_NETWORK?Variable not set}
+      - default
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --providers.docker
+      - --providers.docker.constraints=Label(`traefik.constraint-label-stack`, `${TRAEFIK_TAG?Variable not set}`)
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.swarmmode
+      - --accesslog
+      - --log
+      - --api
+
+  db:
+    image: postgres:12
+    volumes:
+      - app-db-data:/var/lib/postgresql/data/pgdata
+    env_file:
+      - .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+
+  pgadmin:
+    image: dpage/pgadmin4
+    networks:
+      - ${TRAEFIK_PUBLIC_NETWORK?Variable not set}
+      - default
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+  backend:
+    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    env_file:
+      - .env
+    environment:
+      - SERVER_NAME=${DOMAIN?Variable not set}
+      - SERVER_HOST=https://${DOMAIN?Variable not set}
+      - SMTP_HOST=${SMTP_HOST}
+    build:
+      context: ./backend
+      dockerfile: backend.dockerfile
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-false}
+  
+  #frontend:
+  #  image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
+  #  build:
+  #    context: ./frontend
+  #    args:
+  #      FRONTEND_ENV: ${FRONTEND_ENV-production}
+
+volumes:
+  app-db-data:
+
+networks:
+  traefik-public:
+    # Allow setting it to false for testing
+    external: ${TRAEFIK_PUBLIC_NETWORK_IS_EXTERNAL-true}

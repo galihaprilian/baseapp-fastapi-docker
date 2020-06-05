@@ -1,0 +1,59 @@
+version: "3.3"
+services:
+
+  proxy:
+    ports:
+      - "8000:80"
+      - "8090:8080"
+    command:
+      - --providers.docker
+      - --providers.docker.constraints=Label(`traefik.constraint-label-stack`, `${TRAEFIK_TAG?Variable not set}`)
+      - --providers.docker.exposedbydefault=false
+      - --accesslog
+      - --log
+      - --api
+      - --api.insecure=true
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${STACK_NAME?Variable not set}-traefik-public-http.rule=Host(`${DOMAIN?Variable not set}`)
+      - traefik.http.services.${STACK_NAME?Variable not set}-traefik-public.loadbalancer.server.port=80
+
+  pgadmin:
+    ports:
+      - "5050:5050"
+
+  backend:
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./backend/app:/app
+    environment:
+      - SERVER_HOST=http://${DOMAIN?Variable not set}
+    build:
+      context: ./backend
+      dockerfile: backend.dockerfile
+      args:
+        INSTALL_DEV: ${INSTALL_DEV-true}
+    #command: bash -c "while true; do sleep 1; done"  # Infinite loop to keep container live doing nothing
+    command: /start-reload.sh
+    labels:
+      - traefik.enable=true
+      - traefik.constraint-label-stack=${TRAEFIK_TAG?Variable not set}
+      - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.rule=PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/redoc`)
+      - traefik.http.services.${STACK_NAME?Variable not set}-backend.loadbalancer.server.port=80
+
+  #frontend:
+  #  build:
+  #    context: ./frontend
+  #    args:
+  #      FRONTEND_ENV: dev
+  #  labels:
+  #    - traefik.enable=true
+  #    - traefik.constraint-label-stack=${TRAEFIK_TAG?Variable not set}
+  #    - traefik.http.routers.${STACK_NAME?Variable not set}-frontend-http.rule=PathPrefix(`/`)
+  #    - traefik.http.services.${STACK_NAME?Variable not set}-frontend.loadbalancer.server.port=80
+
+networks:
+  traefik-public:
+    # For local dev, don't expect an external Traefik network
+    external: false
